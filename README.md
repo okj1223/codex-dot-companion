@@ -19,7 +19,7 @@ and are not part of this repository.
 ## Install From A Clone
 
 ```bash
-git clone https://github.com/YOUR_NAME/codex-dot-companion.git
+git clone https://github.com/okj1223/codex-dot-companion.git
 cd codex-dot-companion
 ./install.sh
 ```
@@ -51,7 +51,7 @@ The preview server prints a local URL for the browser roster.
 ## Optional pipx Install
 
 ```bash
-pipx install git+https://github.com/YOUR_NAME/codex-dot-companion.git
+pipx install git+https://github.com/okj1223/codex-dot-companion.git
 codex-dot-install
 ```
 
@@ -78,7 +78,7 @@ gh repo create codex-dot-companion --private --source=. --remote=origin --push
 Or push to an existing remote:
 
 ```bash
-git remote add origin git@github.com:YOUR_NAME/codex-dot-companion.git
+git remote add origin git@github.com:okj1223/codex-dot-companion.git
 git branch -M main
 git push -u origin main
 ```
