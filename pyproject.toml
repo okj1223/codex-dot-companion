@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "codex-dot-companion"
+version = "0.1.0"
+description = "Tiny desktop mascot overlay for Codex sessions."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "okj" }]
+license = { text = "MIT" }
+
+[project.scripts]
+codex-dot = "codex_dot_companion.codex_dot:main"
+codex-dot-install = "codex_dot_companion.install:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+codex_dot_companion = ["agent_mascot_preview.html"]
+

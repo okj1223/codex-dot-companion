@@ -1,0 +1,1046 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AgentMascot Preview</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #101214;
+      --panel: #171a1d;
+      --border: #2d3338;
+      --text: #f0f4f8;
+      --muted: #9aa6b2;
+      --body: #4c9dff;
+      --body-hi: #8fc8ff;
+      --body-dark: #1c5fb4;
+      --eye: #0a111a;
+      --mint: #5df2a1;
+      --warn: #7cc7ff;
+      --sweat: #b8f4ff;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      min-height: 100vh;
+      margin: 0;
+      display: grid;
+      place-items: center;
+      background: var(--bg);
+      color: var(--text);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+
+    main {
+      display: grid;
+      gap: 22px;
+      justify-items: center;
+      padding: 24px;
+    }
+
+    .preview-roster {
+      display: none;
+      grid-template-columns: repeat(4, minmax(92px, 1fr));
+      gap: 10px;
+      width: min(430px, calc(100vw - 32px));
+    }
+
+    .mascot-card {
+      min-height: 104px;
+      display: grid;
+      place-items: center;
+      align-content: center;
+      gap: 5px;
+      border: 1px solid var(--border);
+      background: var(--panel);
+    }
+
+    .mascot-name {
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1;
+    }
+
+    .preview-pad {
+      width: 132px;
+      height: 112px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--border);
+      background: var(--panel);
+    }
+
+    .switcher {
+      display: none;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 8px;
+      max-width: 260px;
+    }
+
+    button {
+      min-width: 76px;
+      min-height: 34px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: #111417;
+      color: var(--muted);
+      font: inherit;
+      cursor: pointer;
+    }
+
+    button[aria-pressed="true"] {
+      border-color: var(--body);
+      color: var(--text);
+      background: #162232;
+    }
+
+    button:focus-visible {
+      outline: 2px solid var(--body-hi);
+      outline-offset: 2px;
+    }
+
+    .note {
+      display: none;
+      max-width: 360px;
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+      text-align: center;
+    }
+
+    body[data-dev-preview="true"] .switcher {
+      display: flex;
+    }
+
+    body[data-dev-preview="true"] .note {
+      display: block;
+    }
+
+    body[data-dev-preview="true"] .preview-roster {
+      display: grid;
+    }
+
+    agent-mascot {
+      width: 56px;
+      height: 56px;
+      display: inline-grid;
+      place-items: center;
+      image-rendering: pixelated;
+      contain: layout paint;
+    }
+
+    agent-mascot svg {
+      width: 56px;
+      height: 56px;
+      display: block;
+      overflow: visible;
+      shape-rendering: crispEdges;
+    }
+
+    agent-mascot .body {
+      fill: var(--body);
+    }
+
+    agent-mascot .body-hi {
+      fill: var(--body-hi);
+    }
+
+    agent-mascot .body-dark,
+    agent-mascot .foot {
+      fill: var(--body-dark);
+    }
+
+    agent-mascot .eye {
+      fill: var(--eye);
+      transform-box: fill-box;
+      transform-origin: 50% 50%;
+    }
+
+    agent-mascot .creature,
+    agent-mascot .body-shell,
+    agent-mascot .face,
+    agent-mascot .arm,
+    agent-mascot .foot,
+    agent-mascot .keyboard,
+    agent-mascot .code-fx rect,
+    agent-mascot .variant-fx rect,
+    agent-mascot .work-sweat .drop,
+    agent-mascot .startle-fx rect,
+    agent-mascot .sleep-fx rect,
+    agent-mascot .success-fx rect,
+    agent-mascot .sweat {
+      transform-box: fill-box;
+      transform-origin: 50% 50%;
+    }
+
+    agent-mascot .creature {
+      animation: mascot-idle 2.6s steps(2, end) infinite;
+    }
+
+    agent-mascot .body-shell {
+      transform-origin: 50% 100%;
+    }
+
+    agent-mascot .work-sweat,
+    agent-mascot .variant-fx,
+    agent-mascot .work-face-fx,
+    agent-mascot .code-fx,
+    agent-mascot .sleep-fx,
+    agent-mascot .startle-fx,
+    agent-mascot .success-fx,
+    agent-mascot .error-fx,
+    agent-mascot .keyboard {
+      opacity: 0;
+    }
+
+    agent-mascot .work-sweat rect {
+      fill: var(--sweat);
+    }
+
+    agent-mascot[variant="blink"] .variant-blink,
+    agent-mascot[variant="pip"] .variant-pip,
+    agent-mascot[variant="nib"] .variant-nib,
+    agent-mascot[variant="glyph"] .variant-glyph,
+    agent-mascot[variant="bit"] .variant-bit,
+    agent-mascot[variant="nod"] .variant-nod,
+    agent-mascot[variant="loop"] .variant-loop,
+    agent-mascot[variant="echo"] .variant-echo {
+      opacity: 1;
+    }
+
+    agent-mascot[data-status="idle"] .eye {
+      animation: mascot-blink 4.8s steps(1, end) infinite;
+    }
+
+    agent-mascot[data-status="idle"] .body-shell {
+      animation: mascot-idle-squish 2.6s steps(2, end) infinite;
+    }
+
+    agent-mascot[data-status="idle"] .foot-b,
+    agent-mascot[data-status="idle"] .foot-c {
+      animation: mascot-idle-toe 5.4s steps(2, end) infinite;
+    }
+
+    agent-mascot[data-status="working"] .creature {
+      animation: mascot-work-body 210ms steps(3, end) infinite;
+    }
+
+    agent-mascot[data-status="working"] .body-shell {
+      animation: mascot-work-squish 380ms steps(2, end) infinite;
+    }
+
+    agent-mascot[data-status="working"] .face {
+      animation: mascot-work-face 380ms steps(2, end) infinite;
+    }
+
+    agent-mascot[data-status="working"] .eye {
+      animation: mascot-work-eye 240ms steps(2, end) infinite;
+    }
+
+    agent-mascot[data-status="working"] .eye-left {
+      transform-origin: 100% 50%;
+    }
+
+    agent-mascot[data-status="working"] .eye-right {
+      transform-origin: 0 50%;
+    }
+
+    agent-mascot[data-status="working"] .work-face-fx .focus-mark {
+      animation: mascot-focus-mark 360ms steps(2, end) infinite;
+    }
+
+    agent-mascot[data-status="working"] .work-face-fx .under-eye {
+      animation: mascot-under-eye 520ms steps(2, end) infinite;
+    }
+
+    agent-mascot[data-status="working"] .arm-left {
+      animation: mascot-left-type 170ms steps(2, end) infinite;
+    }
+
+    agent-mascot[data-status="working"] .arm-right {
+      animation: mascot-right-type 170ms steps(2, end) infinite 85ms;
+    }
+
+    agent-mascot[data-status="working"] .keyboard,
+    agent-mascot[data-status="working"] .work-face-fx,
+    agent-mascot[data-status="working"] .code-fx,
+    agent-mascot[data-status="working"] .work-sweat {
+      opacity: 1;
+    }
+
+    agent-mascot[data-status="working"] .code-fx .code-a,
+    agent-mascot[data-status="working"] .code-fx .code-d {
+      animation: mascot-code-pop-a 850ms steps(4, end) infinite;
+    }
+
+    agent-mascot[data-status="working"] .code-fx .code-b,
+    agent-mascot[data-status="working"] .code-fx .code-e {
+      animation: mascot-code-pop-b 940ms steps(4, end) infinite -300ms;
+    }
+
+    agent-mascot[data-status="working"] .code-fx .code-c {
+      animation: mascot-code-pop-c 1000ms steps(4, end) infinite -580ms;
+    }
+
+    agent-mascot[data-status="working"] .work-sweat .sweat-a {
+      animation: mascot-sweat-pop-a 1160ms steps(5, end) infinite -40ms;
+    }
+
+    agent-mascot[data-status="working"] .work-sweat .sweat-b {
+      animation: mascot-sweat-pop-b 1160ms steps(5, end) infinite 15ms;
+    }
+
+    agent-mascot[data-status="working"] .work-sweat .sweat-c {
+      animation: mascot-sweat-pop-c 1160ms steps(5, end) infinite 70ms;
+    }
+
+    agent-mascot[data-status="working"] .key-a {
+      animation: mascot-key 240ms steps(2, end) infinite;
+    }
+
+    agent-mascot[data-status="working"] .key-b {
+      animation: mascot-key 240ms steps(2, end) infinite 120ms;
+    }
+
+    agent-mascot[data-status="working"] .foot-a,
+    agent-mascot[data-status="working"] .foot-c {
+      animation: mascot-stomp-a 240ms steps(2, end) infinite;
+    }
+
+    agent-mascot[data-status="working"] .foot-b,
+    agent-mascot[data-status="working"] .foot-d {
+      animation: mascot-stomp-b 240ms steps(2, end) infinite;
+    }
+
+    agent-mascot[data-status="success"] .creature {
+      animation: mascot-success 920ms steps(5, end) infinite;
+    }
+
+    agent-mascot[data-status="success"] .body-shell {
+      animation: mascot-success-squish 920ms steps(5, end) infinite;
+    }
+
+    agent-mascot[data-status="success"] .eye {
+      transform: translateY(1px) scaleY(0.45);
+    }
+
+    agent-mascot[data-status="success"] .success-fx {
+      opacity: 1;
+    }
+
+    agent-mascot[data-status="success"] .success-fx rect {
+      animation: mascot-spark 1180ms steps(5, end) infinite;
+    }
+
+    agent-mascot[data-status="success"] .arm {
+      transform: translateY(-4px);
+    }
+
+    agent-mascot[data-status="success"] .foot-a,
+    agent-mascot[data-status="success"] .foot-d {
+      animation: mascot-success-feet 920ms steps(5, end) infinite;
+    }
+
+    agent-mascot[data-status="error"] .creature {
+      animation: mascot-error 360ms steps(3, end) infinite;
+    }
+
+    agent-mascot[data-status="error"] .body-shell {
+      animation: mascot-error-squish 720ms steps(2, end) infinite;
+    }
+
+    agent-mascot[data-status="error"] .error-fx {
+      opacity: 1;
+    }
+
+    agent-mascot[data-status="error"] .eye-left {
+      transform: translateY(2px) scaleY(0.5);
+    }
+
+    agent-mascot[data-status="error"] .eye-right {
+      transform: translateY(1px) scaleY(0.7);
+    }
+
+    agent-mascot[data-status="error"] .sweat {
+      animation: mascot-sweat 900ms steps(4, end) infinite;
+    }
+
+    agent-mascot[data-status="idle"][data-sleep="drowsy"] .creature {
+      animation: mascot-drowsy-body 1.6s steps(3, end) infinite;
+    }
+
+    agent-mascot[data-status="idle"][data-sleep="drowsy"] .eye {
+      animation: none;
+      transform: translateY(2px) scaleY(0.38);
+    }
+
+    agent-mascot[data-status="idle"][data-sleep="drowsy"] .arm {
+      transform: translateY(1px);
+    }
+
+    agent-mascot[data-status="idle"][data-sleep="asleep"] .creature {
+      animation: mascot-sleep-body 3.1s steps(3, end) infinite;
+    }
+
+    agent-mascot[data-status="idle"][data-sleep="asleep"] .body-shell {
+      animation: mascot-sleep-squish 3.1s steps(3, end) infinite;
+    }
+
+    agent-mascot[data-status="idle"][data-sleep="asleep"] .eye {
+      animation: none;
+      transform: translateY(3px) scaleY(0.18);
+    }
+
+    agent-mascot[data-status="idle"][data-sleep="asleep"] .arm {
+      transform: translateY(2px);
+    }
+
+    agent-mascot[data-status="idle"][data-sleep="asleep"] .sleep-fx {
+      opacity: 1;
+    }
+
+    agent-mascot[data-status="idle"][data-sleep="asleep"] .sleep-fx .z-a {
+      animation: mascot-sleep-z 2.2s steps(4, end) infinite;
+    }
+
+    agent-mascot[data-status="idle"][data-sleep="asleep"] .sleep-fx .z-b {
+      animation: mascot-sleep-z 2.2s steps(4, end) infinite 650ms;
+    }
+
+    agent-mascot[data-status="idle"][data-sleep="stirring"] .creature {
+      animation: mascot-stir-body 1050ms steps(5, end) 1 both;
+    }
+
+    agent-mascot[data-status="idle"][data-sleep="stirring"] .eye {
+      animation: mascot-stir-eye 1050ms steps(5, end) 1 both;
+    }
+
+    agent-mascot[data-status="idle"][data-sleep="stirring"] .body-shell {
+      animation: mascot-stir-squish 1050ms steps(5, end) 1 both;
+    }
+
+    agent-mascot[data-status="idle"][data-sleep="stirring"] .arm {
+      animation: mascot-stir-arm 1050ms steps(5, end) 1 both;
+    }
+
+    agent-mascot[data-status="idle"][data-sleep="stirring"] .startle-fx {
+      opacity: 1;
+      animation: mascot-startle-fx 900ms steps(4, end) 1 both;
+    }
+
+    agent-mascot[data-status="idle"][data-sleep="stirring"] .startle-fx rect {
+      opacity: 1;
+    }
+
+    @keyframes mascot-idle {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-1px); }
+    }
+
+    @keyframes mascot-blink {
+      0%, 88%, 100% { transform: scaleY(1); }
+      92%, 96% { transform: scaleY(0.18); }
+    }
+
+    @keyframes mascot-idle-squish {
+      0%, 100% { transform: scale(1, 1); }
+      50% { transform: scale(1.04, 0.96); }
+    }
+
+    @keyframes mascot-idle-toe {
+      0%, 86%, 100% { transform: translateY(0); }
+      92% { transform: translateY(-2px); }
+    }
+
+    @keyframes mascot-work-body {
+      0%, 100% { transform: translate(0, 0); }
+      33% { transform: translate(-1px, -1px); }
+      66% { transform: translate(2px, 1px); }
+    }
+
+    @keyframes mascot-work-squish {
+      0%, 100% { transform: scale(1.04, 0.94); }
+      50% { transform: scale(0.96, 1.06); }
+    }
+
+    @keyframes mascot-work-face {
+      0%, 100% { transform: translateX(-1px); }
+      50% { transform: translateX(1px); }
+    }
+
+    @keyframes mascot-work-eye {
+      0%, 100% { transform: translate(0, 1px) scale(1.12, 0.42); }
+      50% { transform: translate(0, 1px) scale(1.22, 0.5); }
+    }
+
+    @keyframes mascot-focus-mark {
+      0%, 100% { opacity: 0.65; transform: translateY(0); }
+      50% { opacity: 1; transform: translateY(1px); }
+    }
+
+    @keyframes mascot-under-eye {
+      0%, 100% { opacity: 0.32; transform: translateY(0); }
+      50% { opacity: 0.52; transform: translateY(1px); }
+    }
+
+    @keyframes mascot-code-pop-a {
+      0%, 100% { opacity: 0; transform: translateY(5px); }
+      20%, 68% { opacity: 0.95; }
+      88% { opacity: 0; transform: translateY(-6px); }
+    }
+
+    @keyframes mascot-code-pop-b {
+      0%, 100% { opacity: 0; transform: translateY(4px); }
+      18%, 64% { opacity: 0.85; }
+      86% { opacity: 0; transform: translateY(-5px); }
+    }
+
+    @keyframes mascot-code-pop-c {
+      0%, 100% { opacity: 0; transform: translateY(4px); }
+      24%, 70% { opacity: 0.78; }
+      92% { opacity: 0; transform: translateY(-4px); }
+    }
+
+    @keyframes mascot-left-type {
+      0%, 100% { transform: translate(0, 0); }
+      50% { transform: translate(0, 6px); }
+    }
+
+    @keyframes mascot-right-type {
+      0%, 100% { transform: translate(0, 5px); }
+      50% { transform: translate(0, -2px); }
+    }
+
+    @keyframes mascot-sweat-pop-a {
+      0%, 5%, 40%, 45%, 80%, 100% { opacity: 0; transform: translate(0, 0); }
+      10% { opacity: 1; transform: translate(1px, -1px); }
+      22% { opacity: 0.85; transform: translate(4px, -4px); }
+      34% { opacity: 0; transform: translate(9px, -8px); }
+      50% { opacity: 1; transform: translate(1px, -1px); }
+      62% { opacity: 0.85; transform: translate(4px, -4px); }
+      74% { opacity: 0; transform: translate(9px, -8px); }
+    }
+
+    @keyframes mascot-sweat-pop-b {
+      0%, 8%, 43%, 48%, 83%, 100% { opacity: 0; transform: translate(0, 0); }
+      14% { opacity: 0.9; transform: translate(1px, -1px); }
+      26% { opacity: 0.78; transform: translate(4px, -4px); }
+      37% { opacity: 0; transform: translate(8px, -7px); }
+      54% { opacity: 0.9; transform: translate(1px, -1px); }
+      66% { opacity: 0.78; transform: translate(4px, -4px); }
+      77% { opacity: 0; transform: translate(8px, -7px); }
+    }
+
+    @keyframes mascot-sweat-pop-c {
+      0%, 11%, 46%, 51%, 86%, 100% { opacity: 0; transform: translate(0, 0); }
+      17% { opacity: 0.78; transform: translate(1px, -1px); }
+      29% { opacity: 0.68; transform: translate(4px, -4px); }
+      40% { opacity: 0; transform: translate(8px, -7px); }
+      57% { opacity: 0.78; transform: translate(1px, -1px); }
+      69% { opacity: 0.68; transform: translate(4px, -4px); }
+      80% { opacity: 0; transform: translate(8px, -7px); }
+    }
+
+    @keyframes mascot-key {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(1px); }
+    }
+
+    @keyframes mascot-stomp-a {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(2px); }
+    }
+
+    @keyframes mascot-stomp-b {
+      0%, 100% { transform: translateY(2px); }
+      50% { transform: translateY(0); }
+    }
+
+    @keyframes mascot-success {
+      0%, 100% { transform: translateY(0); }
+      15% { transform: translateY(-5px); }
+      30% { transform: translateY(0); }
+      45% { transform: translateY(-2px); }
+      60% { transform: translateY(0); }
+    }
+
+    @keyframes mascot-success-squish {
+      0%, 100% { transform: scale(1, 1); }
+      15% { transform: scale(0.94, 1.08); }
+      30% { transform: scale(1.08, 0.92); }
+      45% { transform: scale(0.98, 1.03); }
+      60% { transform: scale(1, 1); }
+    }
+
+    @keyframes mascot-success-feet {
+      0%, 100% { transform: translateY(0); }
+      15%, 45% { transform: translateY(-3px); }
+      30%, 60% { transform: translateY(1px); }
+    }
+
+    @keyframes mascot-spark {
+      0%, 45% { opacity: 1; transform: scale(1); }
+      75%, 100% { opacity: 0; transform: scale(0.5); }
+    }
+
+    @keyframes mascot-error {
+      0%, 100% { transform: translateX(0); }
+      33% { transform: translateX(-2px); }
+      66% { transform: translateX(2px); }
+    }
+
+    @keyframes mascot-error-squish {
+      0%, 100% { transform: scale(1.03, 0.97); }
+      50% { transform: scale(0.97, 1.03); }
+    }
+
+    @keyframes mascot-sweat {
+      0%, 70% { transform: translateY(0); opacity: 1; }
+      100% { transform: translateY(5px); opacity: 0; }
+    }
+
+    @keyframes mascot-drowsy-body {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(2px); }
+    }
+
+    @keyframes mascot-sleep-body {
+      0%, 100% { transform: translateY(2px); }
+      50% { transform: translateY(4px); }
+    }
+
+    @keyframes mascot-sleep-squish {
+      0%, 100% { transform: scale(1.05, 0.92); }
+      50% { transform: scale(1.02, 0.96); }
+    }
+
+    @keyframes mascot-sleep-z {
+      0% { opacity: 0; transform: translate(0, 6px); }
+      25%, 65% { opacity: 1; }
+      100% { opacity: 0; transform: translate(5px, -8px); }
+    }
+
+    @keyframes mascot-stir-body {
+      0% { transform: translateY(3px); }
+      14% { transform: translateY(-7px); }
+      26% { transform: translateY(0); }
+      38% { transform: translateY(-3px); }
+      56%, 100% { transform: translateY(0); }
+    }
+
+    @keyframes mascot-stir-eye {
+      0% { transform: translateY(3px) scaleY(0.18); }
+      14% { transform: translateY(-1px) scaleY(1.25); }
+      34% { transform: translateY(0) scaleY(1); }
+      48% { transform: translateY(1px) scaleY(0.55); }
+      62%, 100% { transform: translateY(0) scaleY(1); }
+    }
+
+    @keyframes mascot-stir-squish {
+      0% { transform: scale(1.05, 0.92); }
+      14% { transform: scale(0.9, 1.16); }
+      28% { transform: scale(1.1, 0.9); }
+      46% { transform: scale(0.98, 1.04); }
+      62%, 100% { transform: scale(1, 1); }
+    }
+
+    @keyframes mascot-stir-arm {
+      0% { transform: translateY(2px); }
+      14% { transform: translateY(-6px); }
+      30% { transform: translateY(-1px); }
+      48% { transform: translateY(-3px); }
+      64%, 100% { transform: translateY(0); }
+    }
+
+    @keyframes mascot-startle-fx {
+      0%, 8% { opacity: 0; transform: translateY(2px); }
+      16%, 62% { opacity: 1; transform: translateY(-2px); }
+      86%, 100% { opacity: 0; transform: translateY(1px); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      agent-mascot *,
+      agent-mascot *::before,
+      agent-mascot *::after {
+        animation: none !important;
+        transition: none !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="preview-pad" aria-label="AgentMascot local preview">
+      <agent-mascot id="mascot" status="idle"></agent-mascot>
+    </div>
+
+    <div class="switcher" role="group" aria-label="Preview status">
+      <button type="button" data-status="idle" aria-pressed="true">idle</button>
+      <button type="button" data-status="working" aria-pressed="false">working</button>
+      <button type="button" data-status="success" aria-pressed="false">success</button>
+      <button type="button" data-status="error" aria-pressed="false">error</button>
+    </div>
+
+    <div class="preview-roster" id="preview-roster" aria-label="Mascot roster preview"></div>
+
+    <p class="note">Local preview only. This is not connected to Codex status.</p>
+  </main>
+
+  <script>
+    class AgentMascot extends HTMLElement {
+      static statuses = ["idle", "working", "success", "error"];
+      sleepDelayMs = 7000;
+      stirDurationMs = 1080;
+      awakeAfterStirMinMs = 4500;
+      awakeAfterStirSpreadMs = 6500;
+      sleepTimer = null;
+      sleepPhaseTimer = null;
+      stirTimer = null;
+
+      static get observedAttributes() {
+        return ["status"];
+      }
+
+      connectedCallback() {
+        if (!this.firstElementChild) {
+          this.render();
+        }
+        this.applyStatus(this.getAttribute("status"));
+      }
+
+      disconnectedCallback() {
+        this.clearSleepTimers();
+      }
+
+      attributeChangedCallback(_name, _oldValue, newValue) {
+        this.applyStatus(newValue);
+      }
+
+      applyStatus(value) {
+        const status = AgentMascot.statuses.includes(value) ? value : "idle";
+        if (this.getAttribute("status") !== status) {
+          this.setAttribute("status", status);
+          return;
+        }
+        this.dataset.status = status;
+        this.wake();
+        if (status === "idle") {
+          this.scheduleSleep();
+        }
+        this.setAttribute("role", "img");
+        this.setAttribute("aria-label", `Agent mascot: ${status}`);
+      }
+
+      clearSleepTimer() {
+        if (this.sleepTimer) {
+          window.clearTimeout(this.sleepTimer);
+          this.sleepTimer = null;
+        }
+      }
+
+      clearSleepTimers() {
+        this.clearSleepTimer();
+        if (this.sleepPhaseTimer) {
+          window.clearTimeout(this.sleepPhaseTimer);
+          this.sleepPhaseTimer = null;
+        }
+        if (this.stirTimer) {
+          window.clearTimeout(this.stirTimer);
+          this.stirTimer = null;
+        }
+      }
+
+      wake() {
+        this.clearSleepTimers();
+        delete this.dataset.sleep;
+      }
+
+      scheduleSleep(delay = this.sleepDelayMs) {
+        this.clearSleepTimers();
+        this.sleepTimer = window.setTimeout(() => {
+          this.sleepTimer = null;
+          this.enterSleep();
+        }, delay);
+      }
+
+      enterSleep() {
+        if (this.dataset.status !== "idle") {
+          return;
+        }
+        this.dataset.sleep = "drowsy";
+        this.setAttribute("aria-label", "Agent mascot: idle, getting sleepy");
+        this.sleepPhaseTimer = window.setTimeout(() => {
+          this.sleepPhaseTimer = null;
+          if (this.dataset.status !== "idle") {
+            return;
+          }
+          this.dataset.sleep = "asleep";
+          this.setAttribute("aria-label", "Agent mascot: idle, sleeping");
+          this.scheduleRandomStir();
+        }, 1600);
+      }
+
+      scheduleRandomStir() {
+        if (this.dataset.status !== "idle" || this.dataset.sleep !== "asleep") {
+          return;
+        }
+        const delay = 6000 + Math.random() * 7000;
+        this.stirTimer = window.setTimeout(() => this.stirFromSleep(), delay);
+      }
+
+      stirFromSleep() {
+        this.stirTimer = null;
+        if (this.dataset.status !== "idle" || this.dataset.sleep !== "asleep") {
+          return;
+        }
+        this.dataset.sleep = "stirring";
+        this.setAttribute("aria-label", "Agent mascot: idle, briefly awake");
+        this.sleepPhaseTimer = window.setTimeout(() => {
+          this.sleepPhaseTimer = null;
+          if (this.dataset.status !== "idle") {
+            return;
+          }
+          delete this.dataset.sleep;
+          this.setAttribute("aria-label", "Agent mascot: idle");
+          const awakeDelay = this.awakeAfterStirMinMs + Math.random() * this.awakeAfterStirSpreadMs;
+          this.scheduleSleep(awakeDelay);
+        }, this.stirDurationMs);
+      }
+
+      render() {
+        this.innerHTML = `
+          <svg viewBox="0 0 56 56" aria-hidden="true" focusable="false">
+            <g class="sleep-fx">
+              <rect class="z-a" x="42" y="7" width="8" height="2" fill="var(--body-hi)" />
+              <rect class="z-a" x="47" y="9" width="2" height="2" fill="var(--body-hi)" />
+              <rect class="z-a" x="45" y="11" width="2" height="2" fill="var(--body-hi)" />
+              <rect class="z-a" x="43" y="13" width="2" height="2" fill="var(--body-hi)" />
+              <rect class="z-a" x="42" y="15" width="8" height="2" fill="var(--body-hi)" />
+              <rect class="z-b" x="48" y="0" width="7" height="2" fill="var(--body-hi)" />
+              <rect class="z-b" x="52" y="2" width="2" height="2" fill="var(--body-hi)" />
+              <rect class="z-b" x="50" y="4" width="2" height="2" fill="var(--body-hi)" />
+              <rect class="z-b" x="48" y="6" width="7" height="2" fill="var(--body-hi)" />
+            </g>
+
+            <g class="startle-fx">
+              <rect x="14" y="9" width="2" height="5" fill="var(--body-hi)" />
+              <rect x="10" y="15" width="5" height="2" fill="var(--body-hi)" />
+              <rect x="42" y="9" width="2" height="5" fill="var(--body-hi)" />
+              <rect x="45" y="15" width="5" height="2" fill="var(--body-hi)" />
+            </g>
+
+            <g class="success-fx">
+              <rect x="9" y="12" width="2" height="6" fill="var(--mint)" />
+              <rect x="7" y="14" width="6" height="2" fill="var(--mint)" />
+              <rect x="45" y="10" width="2" height="6" fill="var(--mint)" />
+              <rect x="43" y="12" width="6" height="2" fill="var(--mint)" />
+            </g>
+
+            <g class="error-fx">
+              <rect class="sweat" x="44" y="15" width="3" height="5" fill="var(--warn)" />
+              <rect x="18" y="22" width="6" height="2" fill="var(--eye)" />
+              <rect x="33" y="22" width="6" height="2" fill="var(--eye)" />
+            </g>
+
+            <g class="creature">
+              <rect class="arm arm-left body" x="10" y="25" width="6" height="9" />
+              <rect class="arm arm-right body" x="40" y="23" width="8" height="10" />
+
+              <g class="body-shell">
+                <rect class="body-hi" x="18" y="14" width="20" height="4" />
+                <rect class="body" x="14" y="18" width="28" height="21" />
+                <rect class="body" x="12" y="24" width="32" height="10" />
+                <rect class="body-dark" x="14" y="35" width="28" height="5" />
+              </g>
+
+              <g class="feet">
+                <rect class="foot foot-a" x="16" y="40" width="4" height="8" />
+                <rect class="foot foot-b" x="24" y="40" width="4" height="6" />
+                <rect class="foot foot-c" x="32" y="40" width="4" height="6" />
+                <rect class="foot foot-d" x="40" y="40" width="4" height="8" />
+              </g>
+
+              <g class="face">
+                <rect class="eye eye-left" x="21" y="25" width="4" height="7" />
+                <rect class="eye eye-right" x="33" y="25" width="4" height="7" />
+              </g>
+
+              <g class="variant-fx variant-blink">
+                <rect x="39" y="17" width="2" height="2" fill="var(--body-hi)" />
+                <rect x="43" y="15" width="2" height="2" fill="var(--body-hi)" />
+              </g>
+
+              <g class="variant-fx variant-pip">
+                <rect x="18" y="23" width="10" height="2" fill="var(--body-hi)" />
+                <rect x="18" y="32" width="10" height="2" fill="var(--body-hi)" />
+                <rect x="18" y="25" width="2" height="7" fill="var(--body-hi)" />
+                <rect x="26" y="25" width="2" height="7" fill="var(--body-hi)" />
+                <rect x="31" y="23" width="10" height="2" fill="var(--body-hi)" />
+                <rect x="31" y="32" width="10" height="2" fill="var(--body-hi)" />
+                <rect x="31" y="25" width="2" height="7" fill="var(--body-hi)" />
+                <rect x="39" y="25" width="2" height="7" fill="var(--body-hi)" />
+                <rect x="28" y="28" width="3" height="2" fill="var(--body-hi)" />
+              </g>
+
+              <g class="variant-fx variant-nib">
+                <rect x="23" y="10" width="4" height="4" fill="var(--body-dark)" />
+                <rect x="27" y="8" width="3" height="3" fill="var(--body-hi)" />
+                <rect x="30" y="10" width="3" height="4" fill="var(--body-dark)" />
+              </g>
+
+              <g class="variant-fx variant-glyph">
+                <rect x="16" y="20" width="3" height="3" fill="var(--body-hi)" />
+                <rect x="20" y="20" width="6" height="2" fill="var(--body-hi)" />
+                <rect x="16" y="24" width="3" height="3" fill="var(--body-hi)" />
+              </g>
+
+              <g class="variant-fx variant-bit">
+                <rect x="38" y="12" width="3" height="3" fill="var(--body-hi)" />
+                <rect x="43" y="15" width="3" height="3" fill="var(--body-hi)" />
+                <rect x="41" y="19" width="3" height="3" fill="var(--body-dark)" />
+              </g>
+
+              <g class="variant-fx variant-nod">
+                <rect x="20" y="21" width="8" height="3" fill="var(--body-dark)" />
+                <rect x="31" y="21" width="8" height="3" fill="var(--body-dark)" />
+              </g>
+
+              <g class="variant-fx variant-loop">
+                <rect x="45" y="28" width="3" height="3" fill="var(--body-dark)" />
+                <rect x="48" y="25" width="3" height="3" fill="var(--body-dark)" />
+                <rect x="51" y="28" width="3" height="3" fill="var(--body-dark)" />
+                <rect x="48" y="31" width="3" height="3" fill="var(--body-dark)" />
+              </g>
+
+              <g class="variant-fx variant-echo">
+                <rect x="11" y="16" width="3" height="3" fill="var(--body-hi)" opacity="0.62" />
+                <rect x="7" y="20" width="3" height="3" fill="var(--body-hi)" opacity="0.52" />
+                <rect x="11" y="24" width="3" height="3" fill="var(--body-hi)" opacity="0.62" />
+              </g>
+
+              <g class="work-face-fx">
+                <rect class="focus-mark" x="27" y="24" width="2" height="2" fill="var(--eye)" />
+                <rect class="focus-mark" x="30" y="24" width="2" height="2" fill="var(--eye)" />
+                <rect class="under-eye" x="21" y="33" width="5" height="2" fill="var(--body-dark)" />
+                <rect class="under-eye" x="33" y="33" width="5" height="2" fill="var(--body-dark)" />
+              </g>
+
+              <g class="work-sweat">
+                <g class="drop sweat-a">
+                  <rect x="42" y="14" width="2" height="2" />
+                  <rect x="45" y="16" width="2" height="2" />
+                  <rect x="48" y="18" width="2" height="2" />
+                </g>
+                <g class="drop sweat-b">
+                  <rect x="42" y="12" width="1" height="1" />
+                  <rect x="45" y="14" width="1" height="1" />
+                  <rect x="48" y="16" width="1" height="1" />
+                </g>
+                <g class="drop sweat-c">
+                  <rect x="42" y="19" width="1" height="1" />
+                  <rect x="45" y="21" width="1" height="1" />
+                  <rect x="48" y="23" width="1" height="1" />
+                </g>
+              </g>
+
+              <g class="code-fx">
+                <rect class="code-a" x="17" y="40" width="7" height="2" fill="var(--body-hi)" />
+                <rect class="code-b" x="26" y="38" width="9" height="2" fill="var(--body-hi)" />
+                <rect class="code-c" x="37" y="40" width="5" height="2" fill="var(--body-hi)" />
+                <rect class="code-d" x="19" y="36" width="3" height="2" fill="var(--body-hi)" />
+                <rect class="code-d" x="22" y="38" width="3" height="2" fill="var(--body-hi)" />
+                <rect class="code-e" x="34" y="36" width="6" height="2" fill="var(--body-hi)" />
+              </g>
+
+              <g class="keyboard">
+                <rect x="16" y="45" width="25" height="5" fill="var(--eye)" />
+                <rect class="key-a" x="19" y="47" width="3" height="1" fill="var(--body-hi)" />
+                <rect class="key-b" x="25" y="47" width="3" height="1" fill="var(--body-hi)" />
+                <rect class="key-a" x="31" y="47" width="3" height="1" fill="var(--body-hi)" />
+                <rect class="key-b" x="36" y="47" width="2" height="1" fill="var(--body-hi)" />
+              </g>
+            </g>
+          </svg>
+        `;
+      }
+    }
+
+    customElements.define("agent-mascot", AgentMascot);
+
+    const params = new URLSearchParams(window.location.search);
+    const devPreview =
+      params.get("dev") === "1" ||
+      window.location.protocol === "file:" ||
+      ["localhost", "127.0.0.1"].includes(window.location.hostname);
+    document.body.dataset.devPreview = String(devPreview);
+
+    const mascot = document.querySelector("#mascot");
+    const buttons = [...document.querySelectorAll(".switcher button[data-status]")];
+    const variants = [
+      ["Blink", "blink"],
+      ["Pip", "pip"],
+      ["Nib", "nib"],
+      ["Glyph", "glyph"],
+      ["Bit", "bit"],
+      ["Nod", "nod"],
+      ["Loop", "loop"],
+      ["Echo", "echo"],
+    ];
+    const roster = document.querySelector("#preview-roster");
+
+    mascot.setAttribute("variant", params.get("variant") || "blink");
+
+    if (devPreview && roster) {
+      variants.forEach(([name, variant], index) => {
+        const card = document.createElement("div");
+        card.className = "mascot-card";
+        const item = document.createElement("agent-mascot");
+        item.setAttribute("status", params.get("status") || "idle");
+        item.setAttribute("variant", variant);
+        item.style.animationDelay = `${index * 70}ms`;
+        const label = document.createElement("div");
+        label.className = "mascot-name";
+        label.textContent = name;
+        card.append(item, label);
+        roster.append(card);
+      });
+    }
+
+    function setPreviewStatus(status) {
+      const nextStatus = AgentMascot.statuses.includes(status) ? status : "idle";
+      document.querySelectorAll("agent-mascot").forEach((item) => {
+        item.setAttribute("status", nextStatus);
+      });
+      buttons.forEach((candidate) => {
+        candidate.setAttribute("aria-pressed", String(candidate.dataset.status === nextStatus));
+      });
+    }
+
+    if (devPreview) {
+      buttons.forEach((button) => {
+        button.addEventListener("click", () => {
+          setPreviewStatus(button.dataset.status);
+        });
+      });
+    }
+
+    setPreviewStatus(params.get("status"));
+    const sleepPreview = params.get("sleep");
+    if (sleepPreview === "1" || sleepPreview === "asleep") {
+      mascot.wake();
+      mascot.dataset.sleep = "asleep";
+      mascot.setAttribute("aria-label", "Agent mascot: idle, sleeping");
+    } else if (sleepPreview === "drowsy" || sleepPreview === "stirring") {
+      mascot.wake();
+      mascot.dataset.sleep = sleepPreview;
+      mascot.setAttribute("aria-label", `Agent mascot: idle, ${sleepPreview}`);
+    }
+  </script>
+</body>
+</html>
