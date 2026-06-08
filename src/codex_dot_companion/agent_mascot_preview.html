@@ -47,11 +47,11 @@
       display: none;
       grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 8px;
-      width: min(408px, calc(100vw - 48px));
+      width: min(456px, calc(100vw - 48px));
     }
 
     .mascot-card {
-      height: 108px;
+      height: 116px;
       min-width: 0;
       padding: 8px 4px 7px;
       display: grid;
@@ -76,8 +76,8 @@
     }
 
     .preview-pad {
-      width: 132px;
-      height: 112px;
+      width: 164px;
+      height: 118px;
       display: grid;
       place-items: center;
       border: 1px solid var(--border);
@@ -147,7 +147,7 @@
     }
 
     agent-mascot {
-      width: 64px;
+      width: 88px;
       height: 64px;
       display: inline-grid;
       place-items: center;
@@ -157,7 +157,7 @@
     }
 
     agent-mascot svg {
-      width: 56px;
+      width: 88px;
       height: 56px;
       display: block;
       overflow: visible;
@@ -189,6 +189,8 @@
     agent-mascot .arm,
     agent-mascot .foot,
     agent-mascot .keyboard,
+    agent-mascot .work-panel,
+    agent-mascot .work-panel rect,
     agent-mascot .code-fx rect,
     agent-mascot .variant-fx rect,
     agent-mascot .work-sweat .drop,
@@ -211,6 +213,7 @@
     agent-mascot .work-sweat,
     agent-mascot .variant-fx,
     agent-mascot .work-face-fx,
+    agent-mascot .work-panel,
     agent-mascot .code-fx,
     agent-mascot .sleep-fx,
     agent-mascot .startle-fx,
@@ -290,9 +293,26 @@
 
     agent-mascot[data-status="working"] .keyboard,
     agent-mascot[data-status="working"] .work-face-fx,
+    agent-mascot[data-status="working"] .work-panel,
     agent-mascot[data-status="working"] .code-fx,
     agent-mascot[data-status="working"] .work-sweat {
       opacity: 1;
+    }
+
+    agent-mascot[data-status="working"] .work-panel .cursor {
+      animation: mascot-cursor 720ms steps(2, end) infinite;
+    }
+
+    agent-mascot[data-status="working"] .work-panel .token-a {
+      animation: mascot-panel-token-a 980ms steps(4, end) infinite;
+    }
+
+    agent-mascot[data-status="working"] .work-panel .token-b {
+      animation: mascot-panel-token-b 1080ms steps(4, end) infinite -260ms;
+    }
+
+    agent-mascot[data-status="working"] .work-panel .token-c {
+      animation: mascot-panel-token-c 1180ms steps(4, end) infinite -520ms;
     }
 
     agent-mascot[data-status="working"] .code-fx .code-a,
@@ -573,6 +593,26 @@
       50% { transform: translateY(1px); }
     }
 
+    @keyframes mascot-cursor {
+      0%, 48% { opacity: 1; }
+      52%, 100% { opacity: 0; }
+    }
+
+    @keyframes mascot-panel-token-a {
+      0%, 100% { opacity: 0.22; transform: translateY(1px); }
+      20%, 82% { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes mascot-panel-token-b {
+      0%, 100% { opacity: 0.18; transform: translateY(1px); }
+      18%, 78% { opacity: 0.92; transform: translateY(0); }
+    }
+
+    @keyframes mascot-panel-token-c {
+      0%, 100% { opacity: 0.14; transform: translateY(1px); }
+      22%, 74% { opacity: 0.86; transform: translateY(0); }
+    }
+
     @keyframes mascot-stomp-a {
       0%, 100% { transform: translateY(0); }
       50% { transform: translateY(2px); }
@@ -836,7 +876,7 @@
 
       render() {
         this.innerHTML = `
-          <svg viewBox="0 0 56 56" aria-hidden="true" focusable="false">
+          <svg viewBox="0 0 86 56" aria-hidden="true" focusable="false">
             <g class="sleep-fx">
               <rect class="z-a" x="42" y="7" width="8" height="2" fill="var(--body-hi)" />
               <rect class="z-a" x="47" y="9" width="2" height="2" fill="var(--body-hi)" />
@@ -867,6 +907,21 @@
               <rect class="sweat" x="44" y="15" width="3" height="5" fill="var(--warn)" />
               <rect x="18" y="22" width="6" height="2" fill="var(--eye)" />
               <rect x="33" y="22" width="6" height="2" fill="var(--eye)" />
+            </g>
+
+            <g class="work-panel">
+              <rect x="49" y="17" width="29" height="16" fill="#020408" opacity="0.72" />
+              <rect x="49" y="17" width="29" height="1" fill="var(--body-hi)" opacity="0.30" />
+              <rect x="49" y="32" width="29" height="1" fill="var(--body-hi)" opacity="0.26" />
+              <rect x="49" y="18" width="1" height="14" fill="var(--body-hi)" opacity="0.24" />
+              <rect x="77" y="18" width="1" height="14" fill="var(--body-hi)" opacity="0.24" />
+              <rect class="token-a" x="52" y="20" width="7" height="1" fill="var(--body-hi)" />
+              <rect class="token-b" x="61" y="20" width="4" height="1" fill="var(--mint)" />
+              <rect class="token-c" x="68" y="20" width="7" height="1" fill="#ffc25d" />
+              <rect class="token-b" x="52" y="25" width="5" height="1" fill="var(--mint)" />
+              <rect class="token-a" x="60" y="25" width="9" height="1" fill="var(--body-hi)" />
+              <rect class="token-c" x="52" y="29" width="11" height="1" fill="#ffc25d" />
+              <rect class="cursor" x="70" y="27" width="1" height="5" fill="#f5fbff" />
             </g>
 
             <g class="creature">
@@ -995,8 +1050,10 @@
     customElements.define("agent-mascot", AgentMascot);
 
     const params = new URLSearchParams(window.location.search);
+    const demoPreview = params.get("demo") === "1";
     const devPreview =
       params.get("dev") === "1" ||
+      demoPreview ||
       window.location.protocol === "file:" ||
       ["localhost", "127.0.0.1"].includes(window.location.hostname);
     document.body.dataset.devPreview = String(devPreview);
@@ -1022,7 +1079,8 @@
         const card = document.createElement("div");
         card.className = "mascot-card";
         const item = document.createElement("agent-mascot");
-        item.setAttribute("status", params.get("status") || "idle");
+        const demoStatus = ["working", "working", "success", "working", "idle", "idle", "working", "error"][index];
+        item.setAttribute("status", demoPreview ? demoStatus : params.get("status") || "idle");
         item.setAttribute("variant", variant);
         item.style.animationDelay = `${index * 70}ms`;
         const label = document.createElement("div");
@@ -1030,6 +1088,12 @@
         label.textContent = name;
         card.append(item, label);
         roster.append(card);
+      });
+    }
+
+    function setRosterStatuses(statuses) {
+      document.querySelectorAll("#preview-roster agent-mascot").forEach((item, index) => {
+        item.setAttribute("status", statuses[index % statuses.length]);
       });
     }
 
@@ -1051,7 +1115,28 @@
       });
     }
 
-    setPreviewStatus(params.get("status"));
+    if (demoPreview) {
+      const script = [
+        [0, "idle", ["idle", "working", "idle", "success", "working", "idle", "working", "idle"]],
+        [900, "working", ["working", "working", "working", "success", "working", "idle", "working", "working"]],
+        [2200, "success", ["success", "working", "success", "working", "idle", "working", "success", "idle"]],
+        [3300, "working", ["working", "success", "working", "working", "working", "idle", "working", "success"]],
+        [5000, "error", ["working", "error", "working", "success", "idle", "working", "working", "error"]],
+        [6100, "working", ["working", "working", "working", "idle", "success", "working", "working", "working"]],
+      ];
+      script.forEach(([delay, status, rosterStatuses]) => {
+        window.setTimeout(() => {
+          mascot.setAttribute("status", status);
+          setRosterStatuses(rosterStatuses);
+          buttons.forEach((candidate) => {
+            candidate.setAttribute("aria-pressed", String(candidate.dataset.status === status));
+          });
+        }, delay);
+      });
+    } else {
+      setPreviewStatus(params.get("status"));
+    }
+
     const sleepPreview = params.get("sleep");
     if (sleepPreview === "1" || sleepPreview === "asleep") {
       mascot.wake();

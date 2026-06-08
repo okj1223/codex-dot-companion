@@ -6,6 +6,8 @@ One running Codex terminal gets one little companion. It works while Codex works
 rests when that session is idle, and keeps the same character for the life of the
 Codex process.
 
+They type, blink, nap, celebrate, and occasionally panic.
+
 ![Codex Dot Companion preview](assets/codex-dot-companion-preview.gif)
 
 > Unofficial third-party project. This is not an OpenAI product.
@@ -18,7 +20,7 @@ Codex process.
 - Click a mascot name to rename that character.
 - Names persist per character in `~/.codex/dot-companion/config.json`.
 - Codex hooks automatically switch mascots between working and done states.
-- Local browser preview for the roster.
+- Local browser demo for the full roster.
 
 ## Install
 
