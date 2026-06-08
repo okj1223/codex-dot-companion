@@ -22,22 +22,25 @@ Codex process.
 
 ## Install
 
-On Ubuntu/Debian, install the desktop runtime dependencies first:
+The fun way is to ask Codex to install it for you.
+
+Open Codex and paste:
+
+```text
+Install this for me:
+https://github.com/okj1223/codex-dot-companion
+
+Use pipx if it is available. Install the GTK/Cairo desktop dependencies if my
+system needs them. Then run codex-dot-install and verify that codex-dot status
+shows the overlay is running.
+```
+
+Codex should handle the steps, but the manual version is:
 
 ```bash
 sudo apt install python3-gi gir1.2-gtk-3.0 python3-cairo
-```
-
-Then install with `pipx`:
-
-```bash
 pipx install git+https://github.com/okj1223/codex-dot-companion.git
 codex-dot-install
-```
-
-Check that it is running:
-
-```bash
 codex-dot status
 ```
 
