@@ -940,6 +940,11 @@ def overlay_main() -> int:
 
         def start_name_edit(self, idx: int) -> None:
             self.finish_name_edit(save=True)
+            slots = self.slots or display_slots()
+            if idx < 0 or idx >= len(slots):
+                return
+            slot = slots[idx]
+            mascot_idx = int(slot.get("mascot_index", idx)) % len(DEFAULT_NAMES)
             x, y = self.slot_origin(idx)
             win_x, win_y = self.get_position()
             editor = Gtk.Window(type=Gtk.WindowType.TOPLEVEL)
@@ -955,7 +960,7 @@ def overlay_main() -> int:
             editor.set_type_hint(Gdk.WindowTypeHint.UTILITY)
 
             entry = Gtk.Entry()
-            entry.set_text(companion_name(idx))
+            entry.set_text(companion_name(mascot_idx))
             entry.set_width_chars(10)
             entry.set_max_length(24)
             entry.set_has_frame(True)
@@ -966,7 +971,7 @@ def overlay_main() -> int:
 
             self.name_editor_window = editor
             self.name_editor_entry = entry
-            self.name_editor_idx = idx
+            self.name_editor_idx = mascot_idx
 
             entry.connect("activate", lambda _entry: self.finish_name_edit(save=True))
             entry.connect("key-press-event", self.on_name_editor_key)
