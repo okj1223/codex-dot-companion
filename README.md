@@ -1,20 +1,45 @@
 # Codex Dot Companion
 
-Tiny desktop mascot overlay for Codex sessions.
+Tiny desktop mascots for your Codex sessions.
 
-It shows one small pixel companion per running Codex process. Each terminal keeps the
-same companion while that Codex process is alive, and a new companion can be assigned
-when Codex is started again.
+One running Codex terminal gets one little companion. It works while Codex works,
+rests when that session is idle, and keeps the same character for the life of the
+Codex process.
 
-## What It Installs
+![Codex Dot Companion preview](assets/codex-dot-companion-preview.gif)
 
-- `~/.codex/dot-companion/codex_dot.py`
-- `~/.codex/dot-companion/agent_mascot_preview.html`
-- `~/.codex/dot-companion/codex-dot`
-- Codex hooks in `~/.codex/hooks.json`
+> Unofficial third-party project. This is not an OpenAI product.
 
-Runtime files such as `state.json`, `assignments.json`, logs, and pid files stay local
-and are not part of this repository.
+## Features
+
+- One mascot per running Codex process.
+- Stable per-terminal assignment while that Codex process is alive.
+- Eight small pixel companions with different idle and working animations.
+- Click a mascot name to rename that character.
+- Names persist per character in `~/.codex/dot-companion/config.json`.
+- Codex hooks automatically switch mascots between working and done states.
+- Local browser preview for the roster.
+
+## Install
+
+On Ubuntu/Debian, install the desktop runtime dependencies first:
+
+```bash
+sudo apt install python3-gi gir1.2-gtk-3.0 python3-cairo
+```
+
+Then install with `pipx`:
+
+```bash
+pipx install git+https://github.com/okj1223/codex-dot-companion.git
+codex-dot-install
+```
+
+Check that it is running:
+
+```bash
+codex-dot status
+```
 
 ## Install From A Clone
 
@@ -22,12 +47,6 @@ and are not part of this repository.
 git clone https://github.com/okj1223/codex-dot-companion.git
 cd codex-dot-companion
 ./install.sh
-```
-
-On Ubuntu/Debian, the overlay needs GTK/Cairo Python bindings:
-
-```bash
-sudo apt install python3-gi gir1.2-gtk-3.0 python3-cairo
 ```
 
 Install without starting the overlay:
@@ -38,55 +57,93 @@ Install without starting the overlay:
 
 ## Commands
 
+For a `pipx` install:
+
+```bash
+codex-dot status
+codex-dot restart
+codex-dot idle
+codex-dot working
+codex-dot mascot-server
+```
+
+For a clone install:
+
 ```bash
 ~/.codex/dot-companion/codex-dot status
 ~/.codex/dot-companion/codex-dot restart
-~/.codex/dot-companion/codex-dot idle
-~/.codex/dot-companion/codex-dot working
 ~/.codex/dot-companion/codex-dot mascot-server
 ```
 
-The preview server prints a local URL for the browser roster.
+`mascot-server` prints a local preview URL for the browser roster.
 
-## Optional pipx Install
+## How It Works
+
+The installer adds two Codex hooks to `~/.codex/hooks.json`:
+
+- `UserPromptSubmit` marks the active Codex process as working.
+- `Stop` marks that process as done.
+
+The overlay also watches local Codex session logs so long-running sessions still
+look active even when a hook event has already scrolled out of the recent state.
+
+## Privacy
+
+This runs locally.
+
+It reads:
+
+- running process metadata from `/proc`
+- local Codex session logs under `~/.codex/sessions`
+- its own config and state files under `~/.codex/dot-companion`
+
+It writes:
+
+- `~/.codex/dot-companion/config.json`
+- `~/.codex/dot-companion/state.json`
+- `~/.codex/dot-companion/assignments.json`
+- overlay pid/log files
+- companion hook entries in `~/.codex/hooks.json`
+
+It does not send telemetry or make network requests.
+
+## Update
+
+For a `pipx` install:
 
 ```bash
-pipx install git+https://github.com/okj1223/codex-dot-companion.git
+pipx upgrade codex-dot-companion
 codex-dot-install
+codex-dot restart
 ```
 
-`codex-dot-install` copies the preview HTML into `~/.codex/dot-companion`, merges the
-Codex hooks, and starts the overlay.
-
-## Git Push Flow
-
-If this directory is not a git repo yet:
+For a clone install:
 
 ```bash
-cd /home/okj/workspace/codex-dot-companion
-git init
-git add .
-git commit -m "Package Codex dot companion"
+cd codex-dot-companion
+git pull
+./install.sh
 ```
 
-Create a GitHub repo and push:
+## Uninstall
+
+Stop the overlay:
 
 ```bash
-gh repo create codex-dot-companion --private --source=. --remote=origin --push
+codex-dot stop
+# or, for a clone install:
+~/.codex/dot-companion/codex-dot stop
 ```
 
-Or push to an existing remote:
+Then remove `~/.codex/dot-companion` and delete the companion hook entries from
+`~/.codex/hooks.json`.
 
-```bash
-git remote add origin git@github.com:okj1223/codex-dot-companion.git
-git branch -M main
-git push -u origin main
-```
+The installer backs up `hooks.json` before writing, using a timestamped
+`hooks.json.bak.*` file.
 
 ## Notes
 
-- The installer backs up an existing `~/.codex/hooks.json` before writing.
+- `CODEX_HOME` is supported for non-default Codex config locations.
 - Existing non-companion hooks are preserved.
-- Companion hooks are replaced to avoid duplicates.
-- `CODEX_HOME` is supported for testing or non-default Codex config locations.
-
+- Companion hooks are replaced on install to avoid duplicates.
+- Runtime state is local and is not part of this repository.

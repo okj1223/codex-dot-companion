@@ -47,7 +47,7 @@
       display: none;
       grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 8px;
-      width: min(424px, calc(100vw - 32px));
+      width: min(408px, calc(100vw - 48px));
     }
 
     .mascot-card {
@@ -137,6 +137,13 @@
 
     body[data-dev-preview="true"] .preview-roster {
       display: grid;
+    }
+
+    @media (max-width: 420px) {
+      .preview-roster {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        width: min(224px, calc(100vw - 32px));
+      }
     }
 
     agent-mascot {
