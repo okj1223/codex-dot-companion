@@ -39,27 +39,37 @@
       display: grid;
       gap: 22px;
       justify-items: center;
-      padding: 24px;
+      width: min(460px, 100vw);
+      padding: 24px 16px;
     }
 
     .preview-roster {
       display: none;
-      grid-template-columns: repeat(4, minmax(92px, 1fr));
-      gap: 10px;
-      width: min(430px, calc(100vw - 32px));
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      width: min(424px, calc(100vw - 32px));
     }
 
     .mascot-card {
-      min-height: 104px;
+      height: 108px;
+      min-width: 0;
+      padding: 8px 4px 7px;
       display: grid;
       place-items: center;
       align-content: center;
       gap: 5px;
       border: 1px solid var(--border);
+      border-radius: 8px;
       background: var(--panel);
+      overflow: hidden;
     }
 
     .mascot-name {
+      max-width: 100%;
+      overflow: hidden;
+      text-align: center;
+      text-overflow: ellipsis;
+      white-space: nowrap;
       color: var(--muted);
       font-size: 11px;
       line-height: 1;
@@ -71,7 +81,9 @@
       display: grid;
       place-items: center;
       border: 1px solid var(--border);
+      border-radius: 8px;
       background: var(--panel);
+      overflow: hidden;
     }
 
     .switcher {
@@ -91,6 +103,7 @@
       color: var(--muted);
       font: inherit;
       cursor: pointer;
+      white-space: nowrap;
     }
 
     button[aria-pressed="true"] {
@@ -127,12 +140,13 @@
     }
 
     agent-mascot {
-      width: 56px;
-      height: 56px;
+      width: 64px;
+      height: 64px;
       display: inline-grid;
       place-items: center;
       image-rendering: pixelated;
       contain: layout paint;
+      overflow: hidden;
     }
 
     agent-mascot svg {

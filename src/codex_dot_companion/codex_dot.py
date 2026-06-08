@@ -79,6 +79,7 @@ AWAKE_AFTER_STIR_SPREAD_SECONDS = 6.5
 RAW_WORKING_STATES = {"loading", "streaming", "generating", "editing", "tool_running", "command_running", "working"}
 RAW_SUCCESS_STATES = {"completed", "complete", "done", "success"}
 RAW_ERROR_STATES = {"failed", "failure", "exception", "error", "attention"}
+CODEX_PROCESS_MARKER = "vendor/x86_64-unknown-linux-musl/bin/codex"
 SESSION_PARSE_CACHE: dict[str, tuple[int, int, dict | None]] = {}
 
 
@@ -229,6 +230,7 @@ def set_companion_name(index: int, name: str) -> None:
 
 def write_state(state: str, cwd: str | None = None, source: str = "manual") -> None:
     ensure_dir()
+    codex_process = current_codex_process_record()
     payload = {
         "state": normalize_state(state),
         "cwd": cwd or os.getcwd(),
@@ -236,6 +238,8 @@ def write_state(state: str, cwd: str | None = None, source: str = "manual") -> N
         "source": source,
         "updated_at": now(),
     }
+    if codex_process:
+        payload.update(codex_process)
     tmp = STATE_FILE.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
     tmp.replace(STATE_FILE)
@@ -304,6 +308,47 @@ def is_running(pid: int) -> bool:
         return True
     except OSError:
         return False
+
+
+def proc_cmdline(pid: int) -> str:
+    try:
+        raw = Path(f"/proc/{pid}/cmdline").read_bytes()
+    except Exception:
+        return ""
+    return raw.replace(b"\x00", b" ").decode("utf-8", errors="ignore")
+
+
+def proc_ppid(pid: int) -> int | None:
+    try:
+        for line in Path(f"/proc/{pid}/status").read_text(encoding="utf-8", errors="ignore").splitlines():
+            if line.startswith("PPid:"):
+                return int(line.split()[1])
+    except Exception:
+        return None
+    return None
+
+
+def current_codex_process_record() -> dict | None:
+    pid = os.getpid()
+    visited: set[int] = set()
+    while pid > 1 and pid not in visited:
+        visited.add(pid)
+        cmdline = proc_cmdline(pid)
+        if CODEX_PROCESS_MARKER in cmdline and "codex_dot.py" not in cmdline:
+            try:
+                cwd = str(Path(f"/proc/{pid}/cwd").resolve())
+            except Exception:
+                cwd = ""
+            return {
+                "codex_pid": pid,
+                "assignment_id": f"codex-process-{pid}",
+                "cwd": cwd or os.getcwd(),
+            }
+        parent = proc_ppid(pid)
+        if not parent:
+            break
+        pid = parent
+    return None
 
 
 def read_pid() -> int | None:
@@ -378,7 +423,9 @@ def parse_iso_timestamp(value: str | None) -> float:
 def parse_session_slot(path: Path) -> dict | None:
     latest: dict | None = None
     latest_cwd = ""
+    latest_turn_id = ""
     user_preview = ""
+    last_activity_ts = 0.0
     for line in tail_lines(path):
         try:
             record = json.loads(line)
@@ -391,25 +438,37 @@ def parse_session_slot(path: Path) -> dict | None:
 
         if record_type == "turn_context":
             latest_cwd = payload.get("cwd") or latest_cwd
+            latest_turn_id = payload.get("turn_id") or latest_turn_id
+            last_activity_ts = max(last_activity_ts, ts)
             continue
 
         if record_type == "response_item":
             message = payload.get("message") if isinstance(payload.get("message"), str) else ""
             if message:
                 user_preview = message[:64]
+            last_activity_ts = max(last_activity_ts, ts)
 
         if record_type != "event_msg":
             continue
 
         event_type = payload.get("type")
+        latest_turn_id = payload.get("turn_id") or latest_turn_id
         if event_type == "user_message":
             user_preview = (payload.get("message") or user_preview)[:64]
+        if event_type in {
+            "agent_message",
+            "token_count",
+            "user_message",
+            "patch_apply_begin",
+            "patch_apply_end",
+        }:
+            last_activity_ts = max(last_activity_ts, ts)
 
         state = event_state(event_type)
         if state == "working":
             latest = {
                 "id": path.stem,
-                "turn_id": payload.get("turn_id") or "",
+                "turn_id": latest_turn_id,
                 "state": "working",
                 "cwd": latest_cwd,
                 "name": companion_name(0),
@@ -421,7 +480,7 @@ def parse_session_slot(path: Path) -> dict | None:
         elif state in {"done", "attention"}:
             latest = {
                 "id": path.stem,
-                "turn_id": payload.get("turn_id") or "",
+                "turn_id": latest_turn_id,
                 "state": state,
                 "cwd": latest_cwd,
                 "name": companion_name(0),
@@ -430,6 +489,23 @@ def parse_session_slot(path: Path) -> dict | None:
                 "path": str(path),
                 "preview": user_preview,
             }
+
+    if (
+        last_activity_ts
+        and latest_cwd
+        and (not latest or last_activity_ts > float(latest.get("updated_at") or 0))
+    ):
+        latest = {
+            "id": path.stem,
+            "turn_id": latest_turn_id,
+            "state": "working",
+            "cwd": latest_cwd,
+            "name": companion_name(0),
+            "source": "session-log",
+            "updated_at": last_activity_ts,
+            "path": str(path),
+            "preview": user_preview,
+        }
 
     return latest
 
@@ -550,30 +626,57 @@ def process_assignment_for_slot(slot: dict, process_records: list[dict]) -> str 
     return None
 
 
+def current_state_slot(current: dict, process_records: list[dict]) -> dict | None:
+    source = str(current.get("source") or "")
+    if source not in {"hook", "manual", "right-click"}:
+        return None
+
+    state = normalize_state(current.get("state"))
+    if state == "idle":
+        return None
+
+    try:
+        updated_at = float(current.get("updated_at") or 0)
+    except Exception:
+        updated_at = 0.0
+    age = now() - updated_at if updated_at else ACTIVE_STALE_SECONDS + 1
+    if source in {"manual", "right-click"} and age > MANUAL_VISIBLE_SECONDS:
+        return None
+    if source == "hook" and state == "done" and age > DONE_VISIBLE_SECONDS:
+        return None
+    if source == "hook" and state in {"working", "attention"} and age > ACTIVE_STALE_SECONDS:
+        return None
+
+    slot = {
+        "id": "current-hook" if source == "hook" else source,
+        "state": state,
+        "cwd": str(current.get("cwd") or ""),
+        "name": companion_name(0),
+        "source": source,
+        "updated_at": updated_at,
+        "preview": "",
+        "mascot_status": mascot_status_for_state(state),
+    }
+
+    live_assignments = {str(record.get("assignment_id")) for record in process_records}
+    assignment_id = str(current.get("assignment_id") or "")
+    if assignment_id and assignment_id in live_assignments:
+        slot["assignment_id"] = assignment_id
+    elif process_records:
+        assignment_id = process_assignment_for_slot(slot, process_records)
+        if assignment_id:
+            slot["assignment_id"] = assignment_id
+    return slot
+
+
 def display_slots() -> list[dict]:
     raw_slots = session_slots()
     slots: list[dict] = []
     process_records = codex_process_records()
     current = read_state()
-    if (
-        not process_records
-        and current.get("source") == "manual"
-        and now() - current.get("updated_at", 0) < MANUAL_VISIBLE_SECONDS
-    ):
-        manual_state = normalize_state(current.get("state"))
-        raw_slots.insert(
-            0,
-            {
-                "id": "manual",
-                "state": manual_state,
-                "cwd": current.get("cwd", ""),
-                "name": companion_name(0),
-                "source": "manual",
-                "updated_at": current.get("updated_at", 0),
-                "preview": "",
-                "mascot_status": mascot_status_for_state(manual_state),
-            },
-        )
+    fallback_slot = current_state_slot(current, process_records)
+    if fallback_slot:
+        raw_slots.append(fallback_slot)
 
     represented_processes = set()
     if process_records:
@@ -644,7 +747,7 @@ def window_size_for_slots(count: int) -> tuple[int, int]:
     count = max(1, min(MAX_SLOTS, count))
     cols = min(4, count)
     rows = math.ceil(count / cols)
-    return 16 + cols * SLOT_W, 12 + rows * SLOT_H
+    return 16 + cols * SLOT_W, 14 + rows * SLOT_H
 
 
 def merge_state(current: dict) -> dict:
@@ -780,7 +883,7 @@ def overlay_main() -> int:
             slots = self.slots or display_slots()
             for idx in range(len(slots)):
                 x, y = self.slot_origin(idx)
-                if x + 8 <= px <= x + SLOT_W - 8 and y + 99 <= py <= y + 122:
+                if x + 8 <= px <= x + SLOT_W - 8 and y + 99 <= py <= y + 125:
                     return idx
             return None
 
@@ -868,7 +971,7 @@ def overlay_main() -> int:
             entry.connect("activate", lambda _entry: self.finish_name_edit(save=True))
             entry.connect("key-press-event", self.on_name_editor_key)
 
-            editor.move(win_x + x + 9, win_y + y + 101)
+            editor.move(win_x + x + 9, win_y + y + 100)
             editor.show_all()
             editor.present()
             gdk_window = editor.get_window()
@@ -1450,8 +1553,17 @@ def overlay_main() -> int:
             mascot_status = self.resolve_mascot_status(slot, idx)
             sleep_phase, sleep_elapsed = self.sleep_phase_for_slot(slot, idx, mascot_status)
 
-            self.round_rect(cr, x + 4, y + 4, SLOT_W - 8, SLOT_H - 8, 9, (0.03, 0.035, 0.044, 0.58))
-            self.draw_agent_mascot(cr, mascot_status, sleep_phase, sleep_elapsed, mascot_idx, x + 23, y + 18)
+            card_x = x + 4
+            card_y = y + 4
+            card_w = SLOT_W - 8
+            card_h = SLOT_H - 8
+            self.round_rect(cr, card_x, card_y, card_w, card_h, 9, (0.03, 0.035, 0.044, 0.58))
+            self.stroke_round_rect(cr, card_x + 0.5, card_y + 0.5, card_w - 1, card_h - 1, 9, (0.47, 0.58, 0.70, 0.14), 1)
+
+            cr.save()
+            self.round_rect_path(cr, card_x, card_y, card_w, card_h, 9)
+            cr.clip()
+            self.draw_agent_mascot(cr, mascot_status, sleep_phase, sleep_elapsed, mascot_idx, x + 20, y + 18)
 
             name = slot.get("name", companion_name(idx))
             if mascot_status == "working":
@@ -1465,32 +1577,42 @@ def overlay_main() -> int:
             else:
                 label = f"{name} idle"
             if self.hover_name_idx == idx:
-                self.round_rect(cr, x + 8, y + 101, SLOT_W - 16, 21, 6, (0.36, 0.95, 1.0, 0.12))
-                self.pbox(cr, x + 18, y + 119, 31, 1, 1, (0.36, 0.95, 1.0, 0.62))
-                self.pbox(cr, x + SLOT_W - 23, y + 106, 2, 7, 2, (0.36, 0.95, 1.0, 0.70))
-                self.pbox(cr, x + SLOT_W - 19, y + 110, 4, 2, 1, (0.36, 0.95, 1.0, 0.70))
-            self.draw_text(cr, label, x + 4, y + 106, SLOT_W - 8, 14, 8.2, (0.94, 0.96, 0.98, 0.95), Pango.Weight.BOLD)
+                self.round_rect(cr, x + 8, y + 99, SLOT_W - 16, 26, 6, (0.36, 0.95, 1.0, 0.12))
+                self.pbox(cr, x + 18, y + 123, 31, 1, 1, (0.36, 0.95, 1.0, 0.62))
+                self.pbox(cr, x + SLOT_W - 23, y + 105, 2, 7, 2, (0.36, 0.95, 1.0, 0.62))
+                self.pbox(cr, x + SLOT_W - 19, y + 109, 4, 2, 1, (0.36, 0.95, 1.0, 0.62))
+            self.draw_text(cr, label, x + 8, y + 103, SLOT_W - 16, 12, 7.8, (0.94, 0.96, 0.98, 0.95), Pango.Weight.BOLD)
             self.draw_text(
                 cr,
                 trim_cwd(slot.get("cwd")),
-                x + 4,
-                y + 120,
-                SLOT_W - 8,
-                12,
-                6.6,
+                x + 8,
+                y + 116,
+                SLOT_W - 16,
+                9,
+                6.1,
                 (0.70, 0.77, 0.83, 0.84),
                 Pango.Weight.NORMAL,
             )
+            cr.restore()
 
-        def round_rect(self, cr, x, y, w, h, r, color) -> None:
+        def round_rect_path(self, cr, x, y, w, h, r) -> None:
             cr.new_sub_path()
             cr.arc(x + w - r, y + r, r, -math.pi / 2, 0)
             cr.arc(x + w - r, y + h - r, r, 0, math.pi / 2)
             cr.arc(x + r, y + h - r, r, math.pi / 2, math.pi)
             cr.arc(x + r, y + r, r, math.pi, 3 * math.pi / 2)
             cr.close_path()
+
+        def round_rect(self, cr, x, y, w, h, r, color) -> None:
+            self.round_rect_path(cr, x, y, w, h, r)
             cr.set_source_rgba(*color)
             cr.fill()
+
+        def stroke_round_rect(self, cr, x, y, w, h, r, color, line_width: float) -> None:
+            self.round_rect_path(cr, x, y, w, h, r)
+            cr.set_source_rgba(*color)
+            cr.set_line_width(line_width)
+            cr.stroke()
 
         def draw_text(self, cr, text, x, y, w, h, size, color, weight) -> None:
             layout = PangoCairo.create_layout(cr)
@@ -1498,14 +1620,20 @@ def overlay_main() -> int:
             layout.set_height(int(h * Pango.SCALE))
             layout.set_ellipsize(Pango.EllipsizeMode.END)
             layout.set_alignment(Pango.Alignment.CENTER)
+            layout.set_single_paragraph_mode(True)
             desc = Pango.FontDescription("Sans")
             desc.set_size(int(size * Pango.SCALE))
             desc.set_weight(weight)
             layout.set_font_description(desc)
-            layout.set_text(text, -1)
-            cr.move_to(x, y)
+            layout.set_text(str(text or ""), -1)
+            _, layout_h = layout.get_pixel_size()
+            cr.save()
+            cr.rectangle(x, y, w, h)
+            cr.clip()
+            cr.move_to(x, y + max(0, (h - layout_h) / 2))
             cr.set_source_rgba(*color)
             PangoCairo.show_layout(cr, layout)
+            cr.restore()
 
     win = DotOverlay()
     if win.slots:
