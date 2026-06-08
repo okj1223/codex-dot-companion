@@ -26,6 +26,27 @@ MASCOT_SERVER_LOG = APP_DIR / "mascot-server.log"
 MASCOT_PREVIEW_FILE = APP_DIR / "agent_mascot_preview.html"
 SESSIONS_DIR = CODEX_HOME / "sessions"
 DEFAULT_NAMES = ["Blink", "Pip", "Nib", "Glyph", "Bit", "Nod", "Loop", "Echo"]
+DEFAULT_POSITION_MARGIN_X = 28
+DEFAULT_POSITION_BOTTOM_GAP = 96
+CODE_PIXEL_GLYPHS = {
+    "f": ("111", "100", "110", "100", "100"),
+    "n": ("000", "110", "101", "101", "101"),
+    "i": ("111", "010", "010", "010", "111"),
+    "{": ("011", "010", "110", "010", "011"),
+    "}": ("110", "010", "011", "010", "110"),
+    "(": ("011", "100", "100", "100", "011"),
+    ")": ("110", "001", "001", "001", "110"),
+    "[": ("111", "100", "100", "100", "111"),
+    "]": ("111", "001", "001", "001", "111"),
+    "=": ("000", "111", "000", "111", "000"),
+    ">": ("100", "010", "001", "010", "100"),
+    ";": ("10", "00", "10", "10", "01"),
+}
+CODE_SNIPPETS = (
+    (("fn", 50, 20, "keyword"), ("{}", 59, 20, "brace"), ("=>", 68, 20, "operator"), (";", 52, 27, "operator")),
+    (("if", 50, 20, "keyword"), ("()", 59, 20, "brace"), ("{}", 68, 20, "brace"), (";", 52, 27, "operator")),
+    (("[]", 50, 20, "brace"), ("=>", 59, 20, "operator"), ("fn", 68, 20, "keyword"), ("{}", 52, 27, "brace")),
+)
 PERSONALITIES = [
     {"mood": "eager", "tempo": 1.18, "idle_period": 18, "blink_period": 54, "work_amp": 1.15, "arm_amp": 1.10, "sleep_delay": 1.15, "sleep_bob": 1, "startle": 1.10, "success": 1.10},
     {"mood": "focused", "tempo": 0.86, "idle_period": 28, "blink_period": 86, "work_amp": 0.62, "arm_amp": 0.72, "sleep_delay": 1.30, "sleep_bob": 0, "startle": 0.72, "success": 0.82},
@@ -44,7 +65,7 @@ MAX_SLOTS = 8
 MASCOT_SERVER_PORT = 8765
 ACTIVE_STALE_SECONDS = 6 * 60 * 60
 WORKING_MIN_VISIBLE_SECONDS = 0.5
-SUCCESS_VISIBLE_SECONDS = 1.5
+SUCCESS_VISIBLE_SECONDS = 5.0
 DONE_VISIBLE_SECONDS = SUCCESS_VISIBLE_SECONDS
 MANUAL_VISIBLE_SECONDS = 60
 OVERLAY_TICK_MS = 60
@@ -84,7 +105,17 @@ def read_config() -> dict:
     for idx, name in enumerate(names):
         fallback = DEFAULT_NAMES[idx] if idx < len(DEFAULT_NAMES) else f"Blink-{idx + 1}"
         clean_names.append(str(name).strip() or fallback)
-    return {"names": clean_names or DEFAULT_NAMES}
+    clean_config = {"names": clean_names or DEFAULT_NAMES}
+    position = config.get("position")
+    if isinstance(position, dict):
+        try:
+            clean_config["position"] = {
+                "x": int(position["x"]),
+                "y": int(position["y"]),
+            }
+        except Exception:
+            pass
+    return clean_config
 
 
 def write_config(config: dict) -> None:
@@ -161,6 +192,22 @@ def companion_names() -> list[str]:
     return read_config()["names"]
 
 
+def saved_window_position() -> tuple[int, int] | None:
+    position = read_config().get("position")
+    if not isinstance(position, dict):
+        return None
+    try:
+        return int(position["x"]), int(position["y"])
+    except Exception:
+        return None
+
+
+def set_window_position(x: int, y: int) -> None:
+    config = read_config()
+    config["position"] = {"x": int(x), "y": int(y)}
+    write_config(config)
+
+
 def companion_name(index: int) -> str:
     names = companion_names()
     if index < len(names):
@@ -169,13 +216,15 @@ def companion_name(index: int) -> str:
 
 
 def set_companion_name(index: int, name: str) -> None:
-    names = companion_names()
+    config = read_config()
+    names = config["names"]
     while len(names) <= index:
         next_index = len(names)
         names.append(DEFAULT_NAMES[next_index] if next_index < len(DEFAULT_NAMES) else f"Blink-{next_index + 1}")
     fallback = DEFAULT_NAMES[index] if index < len(DEFAULT_NAMES) else f"Blink-{index + 1}"
     names[index] = name.strip()[:24] or fallback
-    write_config({"names": names})
+    config["names"] = names
+    write_config(config)
 
 
 def write_state(state: str, cwd: str | None = None, source: str = "manual") -> None:
@@ -657,6 +706,7 @@ def overlay_main() -> int:
             self.connect("draw", self.on_draw)
             self.connect("button-press-event", self.on_button_press)
             self.connect("motion-notify-event", self.on_motion)
+            self.connect("configure-event", self.on_configure)
             self.connect("leave-notify-event", self.on_leave)
             self.connect("destroy", Gtk.main_quit)
 
@@ -672,17 +722,24 @@ def overlay_main() -> int:
             self.slots = display_slots()
             width, height = window_size_for_slots(len(self.slots))
             self.set_size_request(width, height)
-            self.move(geo.x + geo.width - width - 28, geo.y + 74)
-            self.resize(width, height)
             self.frame = 0
             self.done_seen_at: dict[str, float] = {}
             self.mascot_memory: dict[str, dict] = {}
             self.last_state_key = ""
-            self.user_moved = False
+            self.position_save_scheduled = False
+            self.pending_position: tuple[int, int] | None = None
+            saved_position = saved_window_position()
+            self.user_moved = saved_position is not None
             self.hover_name_idx: int | None = None
             self.name_editor_window = None
             self.name_editor_entry = None
             self.name_editor_idx: int | None = None
+            if saved_position is None:
+                x, y = self.default_position(width, height, geo)
+            else:
+                x, y = self.clamp_position(saved_position[0], saved_position[1], width, height, geo)
+            self.move(x, y)
+            self.resize(width, height)
             GLib.timeout_add(OVERLAY_TICK_MS, self.tick)
             GLib.timeout_add(700, self.reload_state)
 
@@ -706,6 +763,18 @@ def overlay_main() -> int:
             slots = self.slots or display_slots()
             cols = min(4, max(1, len(slots)))
             return 12 + (idx % cols) * SLOT_W, 12 + (idx // cols) * SLOT_H
+
+        def default_position(self, width: int, height: int, geo) -> tuple[int, int]:
+            x = geo.x + geo.width - width - DEFAULT_POSITION_MARGIN_X
+            y = geo.y + geo.height - height - DEFAULT_POSITION_BOTTOM_GAP
+            return self.clamp_position(x, y, width, height, geo)
+
+        def clamp_position(self, x: int, y: int, width: int, height: int, geo) -> tuple[int, int]:
+            min_x = geo.x + 8
+            min_y = geo.y + 24
+            max_x = max(min_x, geo.x + geo.width - width - 8)
+            max_y = max(min_y, geo.y + geo.height - height - 8)
+            return min(max(int(x), min_x), max_x), min(max(int(y), min_y), max_y)
 
         def name_hit_index(self, px: float, py: float) -> int | None:
             slots = self.slots or display_slots()
@@ -742,6 +811,22 @@ def overlay_main() -> int:
             if idx != self.hover_name_idx:
                 self.hover_name_idx = idx
                 self.queue_draw()
+            return False
+
+        def on_configure(self, *_args) -> bool:
+            if not self.user_moved:
+                return False
+            self.pending_position = self.get_position()
+            if not self.position_save_scheduled:
+                self.position_save_scheduled = True
+                GLib.timeout_add(400, self.save_pending_position)
+            return False
+
+        def save_pending_position(self) -> bool:
+            self.position_save_scheduled = False
+            if self.pending_position is not None:
+                x, y = self.pending_position
+                set_window_position(x, y)
             return False
 
         def on_leave(self, *_args) -> bool:
@@ -862,7 +947,7 @@ def overlay_main() -> int:
                 screen = self.get_screen()
                 monitor = screen.get_primary_monitor()
                 geo = screen.get_monitor_geometry(monitor if monitor >= 0 else 0)
-                self.move(geo.x + geo.width - width - 28, geo.y + 74)
+                self.move(*self.default_position(width, height, geo))
             self.set_keep_above(True)
             self.queue_draw()
             return True
@@ -898,6 +983,26 @@ def overlay_main() -> int:
 
         def px(self, cr, ox, oy, x, y, w, h, color) -> None:
             self.pbox(cr, ox + x, oy + y, w, h, 1, color)
+
+        def code_token_width(self, token: str) -> int:
+            width = 0
+            for char in token:
+                glyph = CODE_PIXEL_GLYPHS.get(char)
+                width += (len(glyph[0]) if glyph else 2) + 1
+            return max(0, width - 1)
+
+        def draw_code_token(self, cr, ox, oy, x: int, y: int, token: str, color) -> None:
+            cursor = x
+            for char in token:
+                glyph = CODE_PIXEL_GLYPHS.get(char)
+                if not glyph:
+                    cursor += 3
+                    continue
+                for row, bits in enumerate(glyph):
+                    for col, bit in enumerate(bits):
+                        if bit == "1":
+                            self.px(cr, ox, oy, cursor + col, y + row, 1, 1, color)
+                cursor += len(glyph[0]) + 1
 
         def personality_for_index(self, idx: int) -> dict:
             return PERSONALITIES[idx % len(PERSONALITIES)]
@@ -1246,21 +1351,41 @@ def overlay_main() -> int:
             for kx, kw, up in [(19, 3, t % 2 == 0), (25, 3, t % 2 == 1), (31, 3, t % 2 == 0), (36, 2, t % 2 == 1)]:
                 self.px(cr, ox, oy, kx, 47 - (1 if up else 0), kw, 1, code)
 
-            if mood == "reluctant" and (t // 10) % 4 == 0:
-                self.px(cr, ox, oy, 19, 42, 18, 2, (code[0], code[1], code[2], 0.55))
-                self.px(cr, ox, oy, 39, 42, 3, 2, (code[0], code[1], code[2], 0.45))
-                return
+            panel = (0.010, 0.014, 0.020, 0.62)
+            frame = (code[0], code[1], code[2], 0.25)
+            palette = {
+                "keyword": (0.561, 0.784, 1.0, 0.96),
+                "brace": (0.365, 0.949, 0.631, 0.90),
+                "operator": (1.0, 0.761, 0.365, 0.90),
+            }
+            self.px(cr, ox, oy, 48, 17, 29, 16, panel)
+            self.px(cr, ox, oy, 48, 17, 29, 1, frame)
+            self.px(cr, ox, oy, 48, 32, 29, 1, frame)
+            self.px(cr, ox, oy, 48, 18, 1, 14, frame)
+            self.px(cr, ox, oy, 76, 18, 1, 14, frame)
 
-            code_period = max(9, round(13 / max(0.72, work_amp)))
+            code_period = max(10, round(14 / max(0.72, work_amp)))
             code_phase = t % code_period
-            if code_phase < 8:
-                lift = code_phase // 3
-                self.px(cr, ox, oy, 17, 40 - lift, 7, 2, code)
-                self.px(cr, ox, oy, 26, 38 - lift, 9, 2, code)
-            if 3 <= code_phase < 11:
-                lift = (code_phase - 3) // 3
-                self.px(cr, ox, oy, 37, 40 - lift, 5, 2, code)
-                self.px(cr, ox, oy, 34, 36 - lift, 6, 2, code)
+            snippet = CODE_SNIPPETS[(t // code_period) % len(CODE_SNIPPETS)]
+            visible_tokens = min(len(snippet), 1 + code_phase // 3)
+            dim = mood == "reluctant" and (t // 10) % 4 == 0
+            last_token = None
+            for token, tx, ty, kind in snippet[:visible_tokens]:
+                color = palette[kind]
+                if dim:
+                    color = (color[0], color[1], color[2], color[3] * 0.48)
+                jitter = 1 if not dim and ty == 27 and code_phase in {4, 5, 6} else 0
+                self.draw_code_token(cr, ox, oy, tx, ty - jitter, token, color)
+                last_token = (token, tx, ty - jitter)
+
+            if last_token and t % 9 < 5:
+                token, tx, ty = last_token
+                cursor_x = min(74, tx + self.code_token_width(token) + 2)
+                cursor = (0.94, 0.98, 1.0, 0.82 if not dim else 0.42)
+                self.px(cr, ox, oy, cursor_x, ty, 1, 5, cursor)
+
+            if mood == "reluctant" and (t // 10) % 4 == 0:
+                return
 
             def sweat_packet(start: int, rects: list[tuple[int, int, int, int]], alpha: float) -> None:
                 sweat_period = max(12, round(16 / max(0.72, work_amp)))
@@ -1564,7 +1689,9 @@ def main(argv: list[str]) -> int:
         if not names:
             print("error: provide at least one name", file=sys.stderr)
             return 2
-        write_config({"names": names})
+        config = read_config()
+        config["names"] = names
+        write_config(config)
         start_overlay()
         return 0
     if cmd in {"working", "success", "done", "error", "attention", "idle"}:
