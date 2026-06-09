@@ -57,8 +57,8 @@ PERSONALITIES = [
     {"mood": "bouncy", "tempo": 1.02, "idle_period": 19, "blink_period": 64, "work_amp": 1.00, "arm_amp": 0.90, "sleep_delay": 0.95, "sleep_bob": 1, "startle": 1.20, "success": 1.22},
     {"mood": "shy", "tempo": 0.92, "idle_period": 30, "blink_period": 82, "work_amp": 0.78, "arm_amp": 0.82, "sleep_delay": 1.20, "sleep_bob": 0, "startle": 0.92, "success": 0.88},
 ]
-WINDOW_W = 424
-WINDOW_H = 146
+WINDOW_W = 432
+WINDOW_H = 156
 SLOT_W = 102
 SLOT_H = 132
 MAX_SLOTS = 8
@@ -747,7 +747,7 @@ def window_size_for_slots(count: int) -> tuple[int, int]:
     count = max(1, min(MAX_SLOTS, count))
     cols = min(4, count)
     rows = math.ceil(count / cols)
-    return 16 + cols * SLOT_W, 14 + rows * SLOT_H
+    return 24 + cols * SLOT_W, 24 + rows * SLOT_H
 
 
 def merge_state(current: dict) -> dict:
@@ -883,7 +883,7 @@ def overlay_main() -> int:
             slots = self.slots or display_slots()
             for idx in range(len(slots)):
                 x, y = self.slot_origin(idx)
-                if x + 8 <= px <= x + SLOT_W - 8 and y + 99 <= py <= y + 125:
+                if x + 7 <= px <= x + SLOT_W - 7 and y + 98 <= py <= y + 128:
                     return idx
             return None
 
@@ -947,6 +947,10 @@ def overlay_main() -> int:
             mascot_idx = int(slot.get("mascot_index", idx)) % len(DEFAULT_NAMES)
             x, y = self.slot_origin(idx)
             win_x, win_y = self.get_position()
+            edit_x = x + 7
+            edit_y = y + 98
+            edit_w = SLOT_W - 14
+            edit_h = 30
             editor = Gtk.Window(type=Gtk.WindowType.TOPLEVEL)
             editor.set_title("Edit Codex dot name")
             editor.set_decorated(False)
@@ -964,7 +968,7 @@ def overlay_main() -> int:
             entry.set_width_chars(10)
             entry.set_max_length(24)
             entry.set_has_frame(True)
-            entry.set_size_request(SLOT_W - 18, 24)
+            entry.set_size_request(edit_w, edit_h)
             entry.set_alignment(0.5)
             entry.get_style_context().add_class("codex-name-editor")
             editor.add(entry)
@@ -976,8 +980,13 @@ def overlay_main() -> int:
             entry.connect("activate", lambda _entry: self.finish_name_edit(save=True))
             entry.connect("key-press-event", self.on_name_editor_key)
 
-            editor.move(win_x + x + 9, win_y + y + 100)
+            editor.move(win_x + edit_x, win_y + edit_y)
             editor.show_all()
+            editor_w, editor_h = editor.get_size()
+            editor.move(
+                round(win_x + edit_x + (edit_w - editor_w) / 2),
+                round(win_y + edit_y + (edit_h - editor_h) / 2),
+            )
             editor.present()
             gdk_window = editor.get_window()
             if gdk_window is not None:
@@ -1581,20 +1590,23 @@ def overlay_main() -> int:
                 label = f"{name} stale"
             else:
                 label = f"{name} idle"
+            label_box_x = x + 7
+            label_box_y = y + 98
+            label_box_w = SLOT_W - 14
+            label_box_h = 30
+            label_text_x = label_box_x + 5
+            label_text_w = label_box_w - 10
             if self.hover_name_idx == idx:
-                self.round_rect(cr, x + 8, y + 99, SLOT_W - 16, 26, 6, (0.36, 0.95, 1.0, 0.12))
-                self.pbox(cr, x + 18, y + 123, 31, 1, 1, (0.36, 0.95, 1.0, 0.62))
-                self.pbox(cr, x + SLOT_W - 23, y + 105, 2, 7, 2, (0.36, 0.95, 1.0, 0.62))
-                self.pbox(cr, x + SLOT_W - 19, y + 109, 4, 2, 1, (0.36, 0.95, 1.0, 0.62))
-            self.draw_text(cr, label, x + 8, y + 103, SLOT_W - 16, 12, 7.8, (0.94, 0.96, 0.98, 0.95), Pango.Weight.BOLD)
+                self.round_rect(cr, label_box_x, label_box_y, label_box_w, label_box_h, 6, (0.36, 0.95, 1.0, 0.12))
+            self.draw_text(cr, label, label_text_x, y + 102, label_text_w, 13, 7.2, (0.94, 0.96, 0.98, 0.95), Pango.Weight.BOLD)
             self.draw_text(
                 cr,
                 trim_cwd(slot.get("cwd")),
-                x + 8,
+                label_text_x,
                 y + 116,
-                SLOT_W - 16,
-                9,
-                6.1,
+                label_text_w,
+                10,
+                5.8,
                 (0.70, 0.77, 0.83, 0.84),
                 Pango.Weight.NORMAL,
             )

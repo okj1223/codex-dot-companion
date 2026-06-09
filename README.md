@@ -12,19 +12,9 @@ They type, blink, nap, celebrate, and occasionally panic.
 
 > Unofficial third-party project. This is not an OpenAI product.
 
-## Features
+## Quick Install
 
-- One mascot per running Codex process.
-- Stable per-terminal assignment while that Codex process is alive.
-- Eight small pixel companions with different idle and working animations.
-- Click a mascot name to rename that character.
-- Names persist per character in `~/.codex/dot-companion/config.json`.
-- Codex hooks automatically switch mascots between working and done states.
-- Local browser demo for the full roster.
-
-## Install
-
-The fun way is to ask Codex to install it for you.
+The easiest path is to ask Codex to install it for you.
 
 Open Codex and paste:
 
@@ -37,13 +27,31 @@ system needs them. Then run codex-dot-install and verify that codex-dot status
 shows the overlay is running.
 ```
 
-Codex should handle the steps, but the manual version is:
+Manual install:
 
 ```bash
 sudo apt install python3-gi gir1.2-gtk-3.0 python3-cairo
 pipx install git+https://github.com/okj1223/codex-dot-companion.git
 codex-dot-install
 codex-dot status
+```
+
+## Features
+
+- One mascot per running Codex process.
+- Stable per-terminal assignment while that Codex process is alive.
+- Eight small pixel companions with different idle and working animations.
+- Click a mascot name to rename that character.
+- Names persist per character in `~/.codex/dot-companion/config.json`.
+- Codex hooks automatically switch mascots between working and done states.
+- Local browser demo for the full roster.
+
+## System Requirements
+
+On Ubuntu/Debian desktops, install the GTK/Cairo runtime dependencies first:
+
+```bash
+sudo apt install python3-gi gir1.2-gtk-3.0 python3-cairo
 ```
 
 ## Install From A Clone
@@ -67,6 +75,7 @@ For a `pipx` install:
 ```bash
 codex-dot status
 codex-dot restart
+codex-dot stop
 codex-dot idle
 codex-dot working
 codex-dot mascot-server
