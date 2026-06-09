@@ -87,6 +87,10 @@ def now() -> float:
     return time.time()
 
 
+def demo_enabled() -> bool:
+    return os.environ.get("CODEX_DOT_DEMO", "").strip().lower() in {"1", "true", "yes"}
+
+
 def ensure_dir() -> None:
     APP_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -326,6 +330,16 @@ def proc_ppid(pid: int) -> int | None:
     except Exception:
         return None
     return None
+
+
+def proc_state(pid: int) -> str:
+    try:
+        for line in Path(f"/proc/{pid}/status").read_text(encoding="utf-8", errors="ignore").splitlines():
+            if line.startswith("State:"):
+                return line.split(":", 1)[1].strip()
+    except Exception:
+        return ""
+    return ""
 
 
 def current_codex_process_record() -> dict | None:
@@ -583,15 +597,17 @@ def codex_process_records() -> list[dict]:
         return []
 
     records: list[dict] = []
+    process_rows: list[tuple[int, int, str]] = []
     for line in output.splitlines():
-        if "codex_dot.py" in line or "rg " in line:
+        parts = line.strip().split(maxsplit=2)
+        try:
+            pid = int(parts[0])
+        except Exception:
             continue
+        ppid = proc_ppid(pid) or 0
+        cmdline = parts[2] if len(parts) > 2 else ""
+        process_rows.append((pid, ppid, cmdline))
         if "vendor/x86_64-unknown-linux-musl/bin/codex" in line:
-            parts = line.strip().split(maxsplit=2)
-            try:
-                pid = int(parts[0])
-            except Exception:
-                continue
             try:
                 cwd = str(Path(f"/proc/{pid}/cwd").resolve())
             except Exception:
@@ -604,7 +620,33 @@ def codex_process_records() -> list[dict]:
                     "assignment_id": f"codex-process-{pid}",
                 }
             )
+
+    busy_pids = active_codex_process_pids(process_rows, {int(record["pid"]) for record in records})
+    for record in records:
+        record["busy"] = int(record["pid"]) in busy_pids
     return sorted(records, key=lambda item: int(item["pid"]))
+
+
+def active_codex_process_pids(process_rows: list[tuple[int, int, str]], codex_pids: set[int]) -> set[int]:
+    children: dict[int, list[int]] = {}
+    for pid, ppid, _cmdline in process_rows:
+        children.setdefault(ppid, []).append(pid)
+
+    busy: set[int] = set()
+    for root_pid in codex_pids:
+        stack = list(children.get(root_pid, []))
+        seen: set[int] = set()
+        while stack:
+            pid = stack.pop()
+            if pid in seen:
+                continue
+            seen.add(pid)
+            state = proc_state(pid)
+            if state and not state.startswith("Z"):
+                busy.add(root_pid)
+                break
+            stack.extend(children.get(pid, []))
+    return busy
 
 
 def codex_process_ids() -> list[int]:
@@ -624,6 +666,25 @@ def process_assignment_for_slot(slot: dict, process_records: list[dict]) -> str 
     if len(process_records) == 1:
         return str(process_records[0]["assignment_id"])
     return None
+
+
+def process_record_by_assignment(process_records: list[dict]) -> dict[str, dict]:
+    return {str(record.get("assignment_id")): record for record in process_records}
+
+
+def apply_process_activity(slot: dict, process_records_by_assignment: dict[str, dict]) -> dict:
+    assignment_id = str(slot.get("assignment_id") or "")
+    record = process_records_by_assignment.get(assignment_id)
+    if not record or not record.get("busy"):
+        return slot
+    slot["state"] = "working"
+    slot["mascot_status"] = "working"
+    source_parts = [part for part in str(slot.get("source") or "process").split("+") if part]
+    if "process" not in source_parts:
+        source_parts.append("process")
+    slot["source"] = "+".join(source_parts)
+    slot["updated_at"] = max(float(slot.get("updated_at") or 0), now())
+    return slot
 
 
 def current_state_slot(current: dict, process_records: list[dict]) -> dict | None:
@@ -670,9 +731,13 @@ def current_state_slot(current: dict, process_records: list[dict]) -> dict | Non
 
 
 def display_slots() -> list[dict]:
+    if demo_enabled():
+        return demo_slots()
+
     raw_slots = session_slots()
     slots: list[dict] = []
     process_records = codex_process_records()
+    process_records_by_aid = process_record_by_assignment(process_records)
     current = read_state()
     fallback_slot = current_state_slot(current, process_records)
     if fallback_slot:
@@ -727,20 +792,48 @@ def display_slots() -> list[dict]:
             {
                 "id": assignment_id,
                 "assignment_id": assignment_id,
-                "state": "idle",
+                "state": "working" if record.get("busy") else "idle",
                 "cwd": str(record.get("cwd") or ""),
                 "name": companion_name(len(slots)),
-                "source": "process",
-                "updated_at": 0,
+                "source": "process+child" if record.get("busy") else "process",
+                "updated_at": now() if record.get("busy") else 0,
                 "preview": "",
-                "mascot_status": "idle",
+                "mascot_status": "working" if record.get("busy") else "idle",
             }
         )
 
     for idx, slot in enumerate(slots[:MAX_SLOTS]):
+        apply_process_activity(slot, process_records_by_aid)
         slot["state"] = normalize_state(slot.get("state"))
         slot["mascot_status"] = mascot_status_for_state(slot.get("state"))
     return apply_mascot_assignments(slots[:MAX_SLOTS])
+
+
+def demo_slots() -> list[dict]:
+    stamp = now()
+    specs = [
+        ("demo-codex", 4, "working", "~/projects/codex-dot-companion"),
+        ("demo-build", 0, "working", "~/work/agent-lab"),
+        ("demo-review", 5, "working", "~/work/scanner"),
+        ("demo-rest", 6, "idle", "~/notes"),
+    ]
+    slots = []
+    for idx, (slot_id, mascot_idx, state, cwd) in enumerate(specs):
+        slots.append(
+            {
+                "id": slot_id,
+                "assignment_id": slot_id,
+                "state": state,
+                "cwd": cwd,
+                "name": companion_name(mascot_idx),
+                "source": "demo",
+                "updated_at": stamp - idx * 0.35,
+                "preview": "",
+                "mascot_status": mascot_status_for_state(state),
+                "mascot_index": mascot_idx,
+            }
+        )
+    return slots
 
 
 def window_size_for_slots(count: int) -> tuple[int, int]:
@@ -789,7 +882,7 @@ def overlay_main() -> int:
     class DotOverlay(Gtk.Window):
         def __init__(self) -> None:
             super().__init__(type=Gtk.WindowType.TOPLEVEL)
-            self.set_title("Codex dot companion")
+            self.set_title("Codex dot companion demo" if demo_enabled() else "Codex dot companion")
             self.set_decorated(False)
             self.set_resizable(False)
             self.set_size_request(1, 1)
